@@ -2,31 +2,30 @@ let tab_listeners = {};
 let tab_push = {}, tab_lasturl = {};
 let selectedId = -1;
 
-// بازیابی state بعد از بیدار شدن service worker
+// restore state after the service worker wakes up
 const ready = chrome.storage.session.get(['tab_listeners', 'tab_push', 'tab_lasturl', 'selectedId'])
 	.then(function(s) {
 		tab_listeners = s.tab_listeners || {};
 		tab_push = s.tab_push || {};
 		tab_lasturl = s.tab_lasturl || {};
 		if (typeof s.selectedId === 'number') selectedId = s.selectedId;
-	});
+	})
+	.catch(function() {});
 
 function saveState() {
-	chrome.storage.session.set({ tab_listeners, tab_push, tab_lasturl, selectedId });
+	chrome.storage.session.set({ tab_listeners, tab_push, tab_lasturl, selectedId }).catch(function() {});
 }
 
 function refreshCount() {
-	const txt = tab_listeners[selectedId] ? tab_listeners[selectedId].length : 0;
 	if (selectedId < 0) return;
-	chrome.tabs.get(selectedId, function() {
-		if (!chrome.runtime.lastError) {
-			chrome.action.setBadgeText({ text: '' + txt, tabId: selectedId });
-			if (txt > 0) {
-				chrome.action.setBadgeBackgroundColor({ color: [255, 0, 0, 255] });
-			} else {
-				chrome.action.setBadgeBackgroundColor({ color: [0, 0, 255, 0] });
-			}
-		}
+	const tabId = selectedId;
+	const txt = tab_listeners[tabId] ? tab_listeners[tabId].length : 0;
+	chrome.tabs.get(tabId, function() {
+		if (chrome.runtime.lastError) return;
+		chrome.action.setBadgeText({ text: '' + txt, tabId: tabId }).catch(function() {});
+		chrome.action.setBadgeBackgroundColor({
+			color: txt > 0 ? [255, 0, 0, 255] : [0, 0, 255, 0]
+		}).catch(function() {});
 	});
 }
 
@@ -44,7 +43,6 @@ function logListener(data) {
 
 chrome.runtime.onMessage.addListener(function(msg, sender, sendResponse) {
 	ready.then(function() {
-		console.log('message from cs', msg);
 		if (!sender.tab) return;
 		const tabId = sender.tab.id;
 		if (msg.listener) {
